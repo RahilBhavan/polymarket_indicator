@@ -19,12 +19,15 @@ from app.db.signal_runs import (
     get_run_result,
     update_signal_run_with_result,
 )
-from app.fetchers.registry import run_fetchers_for_market
+from app.fetchers.registry import run_all_fetchers, run_fetchers_for_market
 from app.logging_config import get_logger
 from app.polymarket.client import fetch_order_book
 from app.polymarket.depth import max_safe_size_usd
 from app.polymarket.models import Market, MarketQuote, OrderBook, UpDownMarket
-from app.polymarket.selection import select_btc_market
+from app.polymarket.selection import (
+    select_btc_market,
+    select_btc_up_down_hourly_markets_next_n,
+)
 from app.polymarket.selection_15m import (
     build_updown_quote,
     select_btc_15m_updown_market,
@@ -32,7 +35,13 @@ from app.polymarket.selection_15m import (
 from app.signal.engine import run_engine
 from app.signal.engine_15m import Signal15mResult, fetch_klines_1m, run_engine_15m
 from app.signal.reasoning import missing_sources as get_missing_sources
-from app.telegram.formatter import format_signal_message, format_signal_15m_summary
+from app.signal.weights import get_weights
+from app.telegram.formatter import (
+    format_signal_message,
+    format_signal_15m_summary,
+    format_signal_multi_hour,
+    _hour_label_from_slug,
+)
 from app.telegram.send import send_message
 from app.signal.engine import SignalResult
 
@@ -62,12 +71,41 @@ async def handle_signal(token: str, chat_id: int, user_id: int) -> None:
     """
     market: Market | None = await select_btc_market()
     if not market:
-        await send_message(
-            token,
-            chat_id,
-            "No active BTC market found (hourly Up/Down or daily).",
+        # Analytical fallback: run fetchers + engine with synthetic quote so user gets a view
+        settings = get_settings()
+        await ensure_user(user_id)
+        prefs = await get_user_prefs(user_id)
+        bankroll = prefs["bankroll_usd"] if prefs else settings.default_bankroll_usd
+        snapshot = await run_all_fetchers()
+        weights = get_weights()
+        synthetic_quote = MarketQuote(
+            best_bid=0.5,
+            best_ask=0.5,
+            spread=0.0,
+            implied_prob_yes=0.5,
+            max_safe_size_usd=0.0,
         )
-        logger.info("signal_no_market", user_id=user_id)
+        result = run_engine(
+            snapshot,
+            synthetic_quote,
+            market_slug=None,
+            market_condition_id=None,
+            bankroll_usd=bankroll,
+            weights=weights,
+        )
+        missing_list = get_missing_sources(snapshot.results)
+        msg = (
+            "No active BTC market found (hourly Up/Down or daily).\n\n"
+            "<b>Analytical view</b> (no market to trade; model vs 50% reference):\n\n"
+            + format_signal_message(
+                result,
+                verbose=False,
+                missing_sources=missing_list or None,
+                market=None,
+            )
+        )
+        await send_message(token, chat_id, msg)
+        logger.info("signal_analytical_fallback", user_id=user_id)
         return
 
     now_utc = datetime.now(timezone.utc)
@@ -184,6 +222,88 @@ async def handle_signal(token: str, chat_id: int, user_id: int) -> None:
         user_id=user_id,
         market_slug=market.slug,
         direction=result.direction,
+    )
+
+
+async def handle_signal_hourly5(token: str, chat_id: int, user_id: int) -> None:
+    """
+    Predict next 5 hourly BTC Up/Down markets so you can place bets up to 5 hours in advance.
+    One snapshot (fetchers), then per-market quote + engine; single message with links to each.
+    """
+    markets = await select_btc_up_down_hourly_markets_next_n(n=5)
+    if not markets:
+        await send_message(
+            token,
+            chat_id,
+            "No active BTC hourly Up/Down markets found for the next 5 hours.",
+        )
+        logger.info("signal_hourly5_no_markets", user_id=user_id)
+        return
+
+    settings = get_settings()
+    await ensure_user(user_id)
+    prefs = await get_user_prefs(user_id)
+    bankroll = prefs["bankroll_usd"] if prefs else settings.default_bankroll_usd
+
+    snapshot, weights = await run_fetchers_for_market(markets[0])
+    markets_results: list[tuple[Market, SignalResult]] = []
+
+    for market in markets:
+        best_bid = market.best_bid
+        best_ask = market.best_ask
+        book: OrderBook | None = None
+        yes_token = market.clob_token_ids.strip() if market.clob_token_ids else None
+        if yes_token:
+            try:
+                book = await fetch_order_book(yes_token)
+                best_bid = book.best_bid or best_bid
+                best_ask = book.best_ask or best_ask
+            except Exception as e:
+                logger.warning("hourly5_order_book_failed", slug=market.slug, error=str(e))
+        spread = (best_ask - best_bid) if (best_bid is not None and best_ask is not None) else 0.0
+        best_ask_val = best_ask if best_ask is not None else 0.5
+        max_safe = max_safe_size_usd(book, side="ask") if book else 0.0
+        quote = MarketQuote(
+            best_bid=best_bid or 0.0,
+            best_ask=best_ask_val,
+            spread=spread,
+            implied_prob_yes=best_ask_val,
+            max_safe_size_usd=max_safe,
+        )
+        result = run_engine(
+            snapshot,
+            quote,
+            market_slug=market.slug,
+            market_condition_id=market.condition_id,
+            bankroll_usd=bankroll,
+            weights=weights,
+        )
+        markets_results.append((market, result))
+
+    missing_list = get_missing_sources(snapshot.results)
+    msg = format_signal_multi_hour(markets_results, missing_sources=missing_list or None)
+
+    reply_markup: dict[str, Any] | None = None
+    if markets_results:
+        keyboard = []
+        for market, _ in markets_results:
+            if market.slug:
+                label = _hour_label_from_slug(market.slug)
+                keyboard.append([
+                    {
+                        "text": f"Open {label}",
+                        "url": f"https://polymarket.com/event/{market.slug}",
+                    },
+                ])
+        if keyboard:
+            reply_markup = {"inline_keyboard": keyboard}
+
+    await send_message(token, chat_id, msg, reply_markup=reply_markup)
+    logger.info(
+        "command_handled",
+        command="/hourly5",
+        user_id=user_id,
+        market_count=len(markets_results),
     )
 
 

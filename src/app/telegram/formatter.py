@@ -98,6 +98,50 @@ def format_signal_message(
     return msg
 
 
+def _hour_label_from_slug(slug: str | None) -> str:
+    """Extract hour label from slug (e.g. '5pm-et' from 'bitcoin-up-or-down-january-31-5pm-et')."""
+    if not slug:
+        return "?"
+    parts = slug.split("-")
+    for i, p in enumerate(parts):
+        if p and ("pm" in p.lower() or "am" in p.lower()):
+            suffix = "-" + parts[i + 1] if i + 1 < len(parts) and parts[i + 1] == "et" else ""
+            return p + suffix
+    return slug[-24:] if len(slug) > 24 else slug
+
+
+def format_signal_multi_hour(
+    markets_results: list[tuple["Market", SignalResult]],
+    missing_sources: list[str] | None = None,
+) -> str:
+    """One message for next N hourly markets: each with hour label, direction, edge, rec bet, link."""
+    settings = get_settings()
+    prefix = "[PAPER] Do not trade with real money.\n\n" if settings.paper_trading else ""
+    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [
+        prefix + "<b>BTC Hourly Up/Down – Next {} hours</b>".format(len(markets_results)),
+        "Predictions per hour so you can place bets up to 5 hours in advance.",
+        "",
+    ]
+    for market, result in markets_results:
+        hour_label = _hour_label_from_slug(market.slug)
+        direction_str = _direction_display(result, market)
+        line = (
+            f"<b>{hour_label}</b> → {direction_str} | "
+            f"model {result.model_p:.0%} | market {result.market_p:.0%} | "
+            f"edge {result.edge:+.0%} | rec ${result.recommended_usd:.0f}"
+        )
+        lines.append(line)
+        if market.slug:
+            lines.append(f"  → https://polymarket.com/event/{market.slug}")
+    if missing_sources:
+        lines.append("")
+        lines.append(f"Missing factors: {', '.join(missing_sources)}")
+    lines.append("")
+    lines.append(f"Generated: {generated}")
+    return "\n".join(lines)
+
+
 def format_signal_15m_summary(
     result: Signal15mResult,
     market_slug: str | None = None,

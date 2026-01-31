@@ -88,6 +88,18 @@ class Settings(BaseSettings):
         default=False, description="Include stablecoin issuance fetcher"
     )
 
+    # Polymarket API key (optional; for higher rate limits / Builder attribution)
+    polymarket_api_key: str | None = Field(
+        default=None,
+        description="Optional Polymarket API key (from polymarket.com/settings?tab=builder). Sent as Authorization: Bearer.",
+    )
+
+    # Optional: pin /signal to a specific BTC hourly Up/Down market by slug (e.g. bitcoin-up-or-down-january-31-5pm-et)
+    polymarket_btc_hourly_slug: str | None = Field(
+        default=None,
+        description="Optional slug to link /signal to a specific hourly market when active (e.g. bitcoin-up-or-down-january-31-5pm-et).",
+    )
+
     # BTC 15m Up/Down market selection (Gamma events by series_id)
     polymarket_series_id_15m: str = Field(
         default="10192", description="Gamma series_id for BTC 15m Up/Down events"

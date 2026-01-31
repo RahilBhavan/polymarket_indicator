@@ -4,6 +4,7 @@ import json
 from typing import Any, Literal
 
 import httpx
+from app.config import get_settings
 from app.logging_config import get_logger
 from app.polymarket.models import Market, OrderBook, OrderBookLevel, UpDownMarket
 
@@ -11,6 +12,14 @@ logger = get_logger(__name__)
 
 GAMMA_BASE = "https://gamma-api.polymarket.com"
 CLOB_BASE = "https://clob.polymarket.com"
+
+
+def _polymarket_headers() -> dict[str, str]:
+    """Optional auth header when POLYMARKET_API_KEY is set (Bearer token)."""
+    key = get_settings().polymarket_api_key
+    if not key or not key.strip():
+        return {}
+    return {"Authorization": f"Bearer {key.strip()}"}
 
 
 async def fetch_markets(
@@ -25,7 +34,8 @@ async def fetch_markets(
         params["slug"] = slug
     if end_date_min:
         params["end_date_min"] = end_date_min
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    headers = _polymarket_headers()
+    async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
         resp = await client.get(f"{GAMMA_BASE}/markets", params=params)
         resp.raise_for_status()
         data = resp.json()
@@ -103,7 +113,8 @@ async def fetch_order_book(token_id: str) -> OrderBook:
     Fetch order book for one token (YES side) from CLOB.
     GET /book?token_id=...
     """
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    headers = _polymarket_headers()
+    async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
         resp = await client.get(f"{CLOB_BASE}/book", params={"token_id": token_id})
         resp.raise_for_status()
         data = resp.json()
@@ -123,7 +134,8 @@ async def fetch_events_by_series_id(
         "closed": str(closed).lower(),
         "limit": limit,
     }
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    headers = _polymarket_headers()
+    async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
         resp = await client.get(f"{GAMMA_BASE}/events", params=params)
         resp.raise_for_status()
         data = resp.json()
@@ -199,7 +211,8 @@ def parse_updown_market(
 
 async def fetch_clob_price(token_id: str, side: Literal["buy", "sell"]) -> float | None:
     """Fetch CLOB price for one token. GET /price?token_id=...&side=buy|sell."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    headers = _polymarket_headers()
+    async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
         resp = await client.get(f"{CLOB_BASE}/price", params={"token_id": token_id, "side": side})
         resp.raise_for_status()
         data = resp.json()

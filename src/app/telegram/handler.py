@@ -11,6 +11,7 @@ from app.telegram.commands import (
     handle_history,
     handle_signal,
     handle_signal_15m,
+    handle_signal_hourly5,
     handle_settings_callback,
     handle_stats,
 )
@@ -52,9 +53,9 @@ async def handle_update(update: dict[str, Any]) -> None:
         await send_message(
             token,
             chat_id,
-            "CryptoSignal Bot (Polymarket BTC daily + 15m Up/Down).\n\n"
-            "Commands: /signal, /signal15m, /status, /help\n"
-            "Signals are sent daily; use /signal15m for 15m Up/Down.",
+            "CryptoSignal Bot (Polymarket BTC hourly + daily).\n\n"
+            "Commands: /signal, /hourly5, /signal15m, /status, /help\n"
+            "/hourly5 = next 5 hourly markets so you can place bets in advance.",
         )
         logger.info("command_handled", command="/start", user_id=user_id)
     elif command == "/status":
@@ -77,7 +78,8 @@ async def handle_update(update: dict[str, Any]) -> None:
             "Commands:\n"
             "/start - Welcome\n"
             "/status - Bot and DB health\n"
-            "/signal - Today's signal (Polymarket BTC daily)\n"
+            "/signal - Current/next hourly or daily BTC signal\n"
+            "/hourly5 - Next 5 hourly BTC Up/Down (place bets up to 5h ahead)\n"
             "/signal15m - BTC 15m Up/Down signal\n"
             "/stats - Win rate, calibration, streak, drawdown\n"
             "/history [n] - Last n signals with outcome\n"
@@ -87,6 +89,8 @@ async def handle_update(update: dict[str, Any]) -> None:
         logger.info("command_handled", command="/help", user_id=user_id)
     elif command == "/signal":
         await handle_signal(token, chat_id, user_id)
+    elif command in ("/hourly5", "/signal5"):
+        await handle_signal_hourly5(token, chat_id, user_id)
     elif command in ("/signal15m", "/signal_15m"):
         await handle_signal_15m(token, chat_id, user_id)
     elif command == "/stats":
