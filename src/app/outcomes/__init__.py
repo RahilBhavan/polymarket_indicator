@@ -1,0 +1,1 @@
+"""Outcome recording and resolution."""

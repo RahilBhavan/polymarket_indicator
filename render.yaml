@@ -1,0 +1,22 @@
+# CryptoSignal Bot - Render Blueprint (optional)
+# Use when the repo root is cryptosignal/ (or set Root Directory to cryptosignal in Render).
+# Database: use Neon (see docs/DEPLOY_RENDER_NEON.md). Set env vars in Render Dashboard.
+services:
+  - type: web
+    name: cryptosignal
+    runtime: docker
+    plan: free
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: TELEGRAM_ALLOWED_USER_IDS
+        sync: false
+      - key: EOD_CRON_SECRET
+        sync: false

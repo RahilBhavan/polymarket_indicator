@@ -1,0 +1,33 @@
+# CryptoSignal bot: app + Postgres. Set env in .env (never commit).
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    env_file: .env
+    environment:
+      # Override DATABASE_URL so app connects to db service (not localhost)
+      DATABASE_URL: postgresql://cryptosignal:${POSTGRES_PASSWORD:-changeme}@db:5432/cryptosignal
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: cryptosignal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: cryptosignal
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cryptosignal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
