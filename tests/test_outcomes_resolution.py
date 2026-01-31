@@ -7,7 +7,6 @@ import pytest
 import respx
 
 from app.outcomes.resolution import (
-    fetch_1h_open_close_binance,
     is_binance_resolution,
     is_up_down_market,
     parse_rule_from_question,

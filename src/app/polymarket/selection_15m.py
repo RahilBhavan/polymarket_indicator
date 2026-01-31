@@ -59,7 +59,10 @@ def pick_latest_live_market(
     for m in markets:
         end_ms = _safe_time_ms(m.get("endDate") or m.get("end_date"))
         start_ms = _safe_time_ms(
-            m.get("eventStartTime") or m.get("event_start_time") or m.get("startTime") or m.get("startDate")
+            m.get("eventStartTime")
+            or m.get("event_start_time")
+            or m.get("startTime")
+            or m.get("startDate")
         )
         if end_ms is None:
             continue
@@ -109,7 +112,9 @@ async def select_btc_15m_updown_market(
         raw = raw_list[0] if isinstance(raw_list[0], dict) else raw_list
         return parse_updown_market(raw, up_label=up_label, down_label=down_label)
 
-    events = await fetch_events_by_series_id(series_id=series_id, limit=25, active=True, closed=False)
+    events = await fetch_events_by_series_id(
+        series_id=series_id, limit=25, active=True, closed=False
+    )
     flat = flatten_event_markets(events)
     picked = pick_latest_live_market(flat)
     if not picked:

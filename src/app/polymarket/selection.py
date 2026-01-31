@@ -122,7 +122,9 @@ async def select_btc_up_down_hourly_market(now_utc: datetime | None = None) -> M
         candidates.append(m)
     if not candidates:
         return None
-    candidates.sort(key=lambda m: _parse_event_start_utc(m) or datetime.max.replace(tzinfo=timezone.utc))
+    candidates.sort(
+        key=lambda m: _parse_event_start_utc(m) or datetime.max.replace(tzinfo=timezone.utc)
+    )
     return candidates[0]
 
 

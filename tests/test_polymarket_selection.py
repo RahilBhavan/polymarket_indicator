@@ -8,7 +8,6 @@ import pytest
 from app.polymarket.client import parse_market
 from app.polymarket.selection import (
     is_btc_up_down_hourly_market,
-    select_btc_daily_market,
     select_btc_market,
     select_btc_up_down_hourly_market,
 )

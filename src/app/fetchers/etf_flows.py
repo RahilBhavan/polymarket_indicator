@@ -55,14 +55,23 @@ class EtfFlowsFetcher(BaseFetcher):
                 return out_of_range_result(self.source_id)
             score = self.normalize(raw_f)
             stale = False
-            data_ts = data.get("date") or data.get("updated") or data.get("timestamp") or data.get("as_of")
+            data_ts = (
+                data.get("date")
+                or data.get("updated")
+                or data.get("timestamp")
+                or data.get("as_of")
+            )
             if data_ts is not None:
                 try:
                     if isinstance(data_ts, (int, float)):
                         ts_sec = float(data_ts) / 1000.0 if data_ts > 1e10 else float(data_ts)
                     else:
                         dt = datetime.fromisoformat(str(data_ts).replace("Z", "+00:00"))
-                        ts_sec = dt.timestamp() if dt.tzinfo else dt.replace(tzinfo=timezone.utc).timestamp()
+                        ts_sec = (
+                            dt.timestamp()
+                            if dt.tzinfo
+                            else dt.replace(tzinfo=timezone.utc).timestamp()
+                        )
                     age_seconds = time.time() - ts_sec
                     stale = age_seconds > self.max_age_seconds
                 except (TypeError, ValueError):

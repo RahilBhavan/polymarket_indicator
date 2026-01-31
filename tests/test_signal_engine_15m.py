@@ -1,7 +1,5 @@
 """Tests for 15m Up/Down signal engine (edge, time-left, sizing)."""
 
-from unittest.mock import patch
-
 import pytest
 
 from app.polymarket.models import UpDownQuote
@@ -113,9 +111,9 @@ def test_run_engine_15m_sizing_capped_by_liquidity() -> None:
         o = base + i * 10
         c = base + i * 10 + 5
         h = c + 20
-        l = o - 20
+        low = o - 20
         vol = 100.0
-        candles.append([0, o, h, l, c, vol])
+        candles.append([0, o, h, low, c, vol])
     result = run_engine_15m(
         quote=quote,
         remaining_minutes=10.0,

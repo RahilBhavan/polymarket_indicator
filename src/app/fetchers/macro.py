@@ -61,7 +61,9 @@ class MacroFetcher(BaseFetcher):
 
     async def _do_fetch(self) -> FetcherResult:
         api_key = (os.getenv("FMP_API_KEY") or "").strip()
-        url_base = (os.getenv("FMP_ECONOMIC_CALENDAR_URL") or DEFAULT_FMP_ECONOMIC_CALENDAR_URL).strip()
+        url_base = (
+            os.getenv("FMP_ECONOMIC_CALENDAR_URL") or DEFAULT_FMP_ECONOMIC_CALENDAR_URL
+        ).strip()
         if not api_key:
             return FetcherResult(
                 source_id=self.source_id,
@@ -76,7 +78,11 @@ class MacroFetcher(BaseFetcher):
                 resp.raise_for_status()
                 data = resp.json()
             if not isinstance(data, list):
-                data = data if isinstance(data, list) else (data.get("data") or data.get("events") or [])
+                data = (
+                    data
+                    if isinstance(data, list)
+                    else (data.get("data") or data.get("events") or [])
+                )
             if not isinstance(data, list):
                 data = []
             now_utc = datetime.now(timezone.utc)

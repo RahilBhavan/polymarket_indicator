@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+render-env-paste.txt
 .venv
 venv
 __pycache__

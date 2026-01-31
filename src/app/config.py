@@ -118,7 +118,10 @@ class Settings(BaseSettings):
         description="Chainlink BTC/USD aggregator contract on Polygon",
     )
     chainlink_http_cache_seconds: float = Field(
-        default=2.0, gt=0, le=60, description="Min interval between Chainlink HTTP fetches (seconds)"
+        default=2.0,
+        gt=0,
+        le=60,
+        description="Min interval between Chainlink HTTP fetches (seconds)",
     )
 
     @model_validator(mode="after")

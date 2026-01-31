@@ -164,12 +164,18 @@ def parse_updown_market(
     """
     outcomes, token_ids = _parse_outcomes_and_token_ids(raw)
     if len(outcomes) < 2 or len(token_ids) < 2:
-        logger.warning("parse_updown_skip", reason="need two outcomes and two token ids", raw_id=raw.get("id"))
+        logger.warning(
+            "parse_updown_skip", reason="need two outcomes and two token ids", raw_id=raw.get("id")
+        )
         return None
     up_label_lower = up_label.strip().lower()
     down_label_lower = down_label.strip().lower()
-    up_index = next((i for i, o in enumerate(outcomes) if o.strip().lower() == up_label_lower), None)
-    down_index = next((i for i, o in enumerate(outcomes) if o.strip().lower() == down_label_lower), None)
+    up_index = next(
+        (i for i, o in enumerate(outcomes) if o.strip().lower() == up_label_lower), None
+    )
+    down_index = next(
+        (i for i, o in enumerate(outcomes) if o.strip().lower() == down_label_lower), None
+    )
     if up_index is None or down_index is None:
         logger.warning("parse_updown_skip", reason="up/down labels not found", outcomes=outcomes)
         return None

@@ -24,7 +24,13 @@ def validate_startup_config() -> None:
     """
     Validate critical configuration on startup.
     Exits with error code 1 if validation fails.
+    Skips validation when CRYPTOSIGNAL_SKIP_STARTUP_VALIDATION is set (e.g. in pytest).
     """
+    import os
+
+    if os.environ.get("CRYPTOSIGNAL_SKIP_STARTUP_VALIDATION"):
+        return
+
     # Add scripts to path for validation import
     project_root = Path(__file__).parent.parent.parent
     scripts_path = project_root / "scripts"
@@ -48,7 +54,7 @@ def validate_startup_config() -> None:
         # Validation script not available, log warning and continue
         logger.warning(
             "startup_validation_skipped",
-            msg="validate_env.py not found, skipping startup validation"
+            msg="validate_env.py not found, skipping startup validation",
         )
     finally:
         # Clean up path
@@ -74,12 +80,12 @@ async def lifespan(app: FastAPI):
         if settings.eod_cron_secret is None:
             logger.warning(
                 "eod_cron_secret_unset_in_production",
-                msg="EOD_CRON_SECRET should be set in production"
+                msg="EOD_CRON_SECRET should be set in production",
             )
         if settings.admin_chat_id is None:
             logger.warning(
                 "admin_chat_id_unset_in_production",
-                msg="ADMIN_CHAT_ID recommended for production error alerts"
+                msg="ADMIN_CHAT_ID recommended for production error alerts",
             )
 
     logger.info("startup_complete", msg="CryptoSignal bot started successfully")
@@ -97,6 +103,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CryptoSignal Bot", lifespan=lifespan)
+
+
+@app.get("/")
+async def root() -> JSONResponse:
+    """Root route for health checks and discovery. Returns 200 so Render/browsers don't get 404."""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "service": "CryptoSignal Bot",
+            "health": "/health",
+            "docs": "/docs",
+        },
+    )
 
 
 @app.get("/health")

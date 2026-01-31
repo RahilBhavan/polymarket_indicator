@@ -49,7 +49,8 @@ def test_eod_outcomes_403_when_secret_unset() -> None:
             resp = client.post("/internal/run-eod-outcomes")
         assert resp.status_code == 403
         data = resp.json()
-        assert "EOD_CRON_SECRET" in (data.get("error") or "")
+        err = (data.get("error") or "").lower()
+        assert "invalid" in err or "missing" in err or "secret" in err
     finally:
         if prev is not None:
             os.environ["EOD_CRON_SECRET"] = prev

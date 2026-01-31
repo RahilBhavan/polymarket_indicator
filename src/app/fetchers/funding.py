@@ -6,7 +6,9 @@ from app.fetchers.base import BaseFetcher, FetcherResult, get_fetcher_timeout, w
 from app.fetchers.bounds import check_bounds, out_of_range_result
 
 BINANCE_FUNDING = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"
-BYBIT_FUNDING = "https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=1"
+BYBIT_FUNDING = (
+    "https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=1"
+)
 
 
 class FundingFetcher(BaseFetcher):

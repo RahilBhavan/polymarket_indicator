@@ -75,9 +75,7 @@ async def fetch_resolved_runs_with_features(
     source_id, raw_value, normalized_score, stale. For backtest and feature-outcome analysis.
     """
     dt_from = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
-    dt_to = datetime(
-        date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc
-    )
+    dt_to = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
     async with acquire() as conn:
         rows = await conn.fetch(
             """

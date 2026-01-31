@@ -125,7 +125,10 @@ def format_signal_15m_summary(
         f"Rec. bet: ${result.recommended_usd:.2f}\n"
     )
     if result.reasoning:
-        parts = [f"{r.get('factor', '?')}={r.get('value', r.get('detail', '-'))}" for r in result.reasoning[:5]]
+        parts = [
+            f"{r.get('factor', '?')}={r.get('value', r.get('detail', '-'))}"
+            for r in result.reasoning[:5]
+        ]
         msg += f"Reasoning: {', '.join(str(p) for p in parts)}\n"
     if result.liquidity_warning:
         msg += f"⚠ {result.liquidity_warning}\n"

@@ -8,6 +8,7 @@ from app.fetchers.bounds import check_bounds, out_of_range_result
 
 DXY_URL = "https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?range=5d&interval=1d"
 DXY_429_RETRY_DELAY = 5.0  # seconds before retry on rate limit
+DXY_429_MAX_ATTEMPTS = 2  # try once, retry once on 429
 
 
 class DxyFetcher(BaseFetcher):

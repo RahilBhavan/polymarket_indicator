@@ -5,7 +5,6 @@ from typing import Any
 
 import httpx
 
-from app.config import get_settings
 from app.logging_config import get_logger
 from app.polymarket.models import UpDownQuote
 from app.signal.kelly import recommended_size_usd
@@ -166,8 +165,18 @@ def _heiken_ashi_color(candles: list[list[float]]) -> str | None:
     """Last bar Heiken Ashi color: 'green' or 'red'."""
     if len(candles) < 2:
         return None
-    o0, h0, l0, c0 = float(candles[-2][1]), float(candles[-2][2]), float(candles[-2][3]), float(candles[-2][4])
-    o1, h1, l1, c1 = float(candles[-1][1]), float(candles[-1][2]), float(candles[-1][3]), float(candles[-1][4])
+    o0, _, _, c0 = (
+        float(candles[-2][1]),
+        float(candles[-2][2]),
+        float(candles[-2][3]),
+        float(candles[-2][4]),
+    )
+    o1, h1, l1, c1 = (
+        float(candles[-1][1]),
+        float(candles[-1][2]),
+        float(candles[-1][3]),
+        float(candles[-1][4]),
+    )
     ha_c = (o1 + h1 + l1 + c1) / 4
     ha_o = (o0 + c0) / 2
     return "green" if ha_c >= ha_o else "red"
@@ -180,7 +189,12 @@ def _heiken_ashi_consecutive_count(candles: list[list[float]]) -> int:
     colors: list[str] = []
     for i in range(1, len(candles)):
         o0, c0 = float(candles[i - 1][1]), float(candles[i - 1][4])
-        o1, h1, l1, c1 = float(candles[i][1]), float(candles[i][2]), float(candles[i][3]), float(candles[i][4])
+        o1, h1, l1, c1 = (
+            float(candles[i][1]),
+            float(candles[i][2]),
+            float(candles[i][3]),
+            float(candles[i][4]),
+        )
         ha_c = (o1 + h1 + l1 + c1) / 4
         ha_o = (o0 + c0) / 2
         colors.append("green" if ha_c >= ha_o else "red")
@@ -243,7 +257,9 @@ def _score_direction(
     return up / (up + down)
 
 
-def _apply_time_awareness(raw_up: float, remaining_minutes: float | None, window_minutes: float) -> tuple[float, float]:
+def _apply_time_awareness(
+    raw_up: float, remaining_minutes: float | None, window_minutes: float
+) -> tuple[float, float]:
     """Decay raw_up toward 0.5 as time runs out. Return (adjusted_up, adjusted_down)."""
     if remaining_minutes is None or remaining_minutes < 0:
         time_decay = 0.0
@@ -367,7 +383,9 @@ def run_engine_15m(
         ha_count,
         failed_vwap_reclaim,
     )
-    model_up, model_down = _apply_time_awareness(raw_up, remaining_minutes, float(CANDLE_WINDOW_MINUTES))
+    model_up, model_down = _apply_time_awareness(
+        raw_up, remaining_minutes, float(CANDLE_WINDOW_MINUTES)
+    )
 
     edge_up, edge_down = _compute_edge_up_down(
         model_up,

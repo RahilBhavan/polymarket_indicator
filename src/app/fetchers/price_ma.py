@@ -6,7 +6,9 @@ from app.fetchers.base import BaseFetcher, FetcherResult, get_fetcher_timeout, w
 from app.fetchers.bounds import check_bounds, out_of_range_result
 
 BINANCE_KLINES = "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=51"
-COINGECKO_MARKET_CHART = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=60"
+COINGECKO_MARKET_CHART = (
+    "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=60"
+)
 # If Binance and CoinGecko last-close diff exceeds this fraction, mark result stale
 PRICE_DISCREPANCY_THRESHOLD = 0.01
 

@@ -45,10 +45,17 @@ def _parse_price_message(msg: str) -> tuple[float | None, int | None]:
             return (None, None)
     if not isinstance(payload, dict):
         return (None, None)
-    symbol = str(payload.get("symbol") or payload.get("pair") or payload.get("ticker") or "").lower()
+    symbol = str(
+        payload.get("symbol") or payload.get("pair") or payload.get("ticker") or ""
+    ).lower()
     if _symbol_filter not in symbol:
         return (None, None)
-    raw_price = payload.get("value") or payload.get("price") or payload.get("current") or payload.get("data")
+    raw_price = (
+        payload.get("value")
+        or payload.get("price")
+        or payload.get("current")
+        or payload.get("data")
+    )
     try:
         price = float(raw_price)
     except (TypeError, ValueError):
