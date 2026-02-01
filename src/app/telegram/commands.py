@@ -596,7 +596,6 @@ def get_bet_size_keyboard() -> dict[str, Any]:
             ],
         ],
     }
-}
 
 
 def get_kelly_keyboard() -> dict[str, Any]:
