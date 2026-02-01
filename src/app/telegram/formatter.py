@@ -42,13 +42,22 @@ def format_signal_summary(
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     header = _header(market)
     direction_str = _direction_display(result, market)
+    rec_line = f"Rec. bet: ${result.recommended_usd:.2f}"
+    if result.user_bet_cap_usd is not None or result.kelly_fraction_used is not None:
+        parts = []
+        if result.user_bet_cap_usd is not None:
+            parts.append(f"cap ${result.user_bet_cap_usd:.2f}")
+        if result.kelly_fraction_used is not None:
+            parts.append(f"Kelly {result.kelly_fraction_used:.0%}")
+        rec_line += " (" + ", ".join(parts) + ")"
+    rec_line += "\n"
     msg = (
         prefix + f"<b>SIGNAL: {header}</b>\n"
         f"Direction: {direction_str}\n"
         f"Model confidence: {result.model_p:.0%}\n"
         f"Market price: {result.market_p:.0%}\n"
         f"Edge: {result.edge:+.0%}\n"
-        f"Rec. bet: ${result.recommended_usd:.2f}\n"
+        f"{rec_line}"
         f"Reasoning: {result.reasoning_summary}\n"
     )
     if missing_sources:

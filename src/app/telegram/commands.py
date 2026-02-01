@@ -85,6 +85,8 @@ async def handle_signal(token: str, chat_id: int, user_id: int) -> None:
             implied_prob_yes=0.5,
             max_safe_size_usd=0.0,
         )
+        max_bet = prefs.get("bet_size_usd") if prefs else None
+        kelly_override = prefs.get("kelly_fraction_override") if prefs else None
         result = run_engine(
             snapshot,
             synthetic_quote,
@@ -92,6 +94,8 @@ async def handle_signal(token: str, chat_id: int, user_id: int) -> None:
             market_condition_id=None,
             bankroll_usd=bankroll,
             weights=weights,
+            max_bet_usd=max_bet,
+            kelly_fraction_override=kelly_override,
         )
         missing_list = get_missing_sources(snapshot.results)
         msg = (
@@ -182,6 +186,8 @@ async def handle_signal(token: str, chat_id: int, user_id: int) -> None:
     await ensure_user(user_id)
     prefs = await get_user_prefs(user_id)
     bankroll = prefs["bankroll_usd"] if prefs else settings.default_bankroll_usd
+    max_bet = prefs.get("bet_size_usd") if prefs else None
+    kelly_override = prefs.get("kelly_fraction_override") if prefs else None
     result = run_engine(
         snapshot,
         quote,
@@ -189,6 +195,8 @@ async def handle_signal(token: str, chat_id: int, user_id: int) -> None:
         market_condition_id=market.condition_id,
         bankroll_usd=bankroll,
         weights=weights,
+        max_bet_usd=max_bet,
+        kelly_fraction_override=kelly_override,
     )
     if used_gamma_fallback:
         fallback_note = "Order book unavailable; using Gamma mid. "
@@ -244,6 +252,8 @@ async def handle_signal_hourly5(token: str, chat_id: int, user_id: int) -> None:
     await ensure_user(user_id)
     prefs = await get_user_prefs(user_id)
     bankroll = prefs["bankroll_usd"] if prefs else settings.default_bankroll_usd
+    max_bet = prefs.get("bet_size_usd") if prefs else None
+    kelly_override = prefs.get("kelly_fraction_override") if prefs else None
 
     snapshot, weights = await run_fetchers_for_market(markets[0])
     markets_results: list[tuple[Market, SignalResult]] = []
@@ -277,6 +287,8 @@ async def handle_signal_hourly5(token: str, chat_id: int, user_id: int) -> None:
             market_condition_id=market.condition_id,
             bankroll_usd=bankroll,
             weights=weights,
+            max_bet_usd=max_bet,
+            kelly_fraction_override=kelly_override,
         )
         markets_results.append((market, result))
 
@@ -537,11 +549,15 @@ async def handle_full_details(token: str, chat_id: int) -> None:
 
 
 def get_settings_keyboard() -> dict[str, Any]:
-    """Inline keyboard for /settings: Set bankroll, Set verbosity, Back."""
+    """Inline keyboard for /settings: bankroll, bet size, Kelly fraction, verbosity, Back."""
     return {
         "inline_keyboard": [
             [
                 {"text": "Set bankroll", "callback_data": "settings_bankroll"},
+                {"text": "Set bet size", "callback_data": "settings_bet_size"},
+            ],
+            [
+                {"text": "Set Kelly %", "callback_data": "settings_kelly"},
                 {"text": "Set verbosity", "callback_data": "settings_verbose"},
             ],
             [{"text": "Back", "callback_data": "settings_back"}],
@@ -560,6 +576,42 @@ def get_bankroll_keyboard() -> dict[str, Any]:
                 {"text": "$5000", "callback_data": "bankroll_5000"},
             ],
             [{"text": "Back", "callback_data": "settings_back"}],
+        ],
+    }
+
+
+def get_bet_size_keyboard() -> dict[str, Any]:
+    """Inline keyboard for max bet size (USD); caps Kelly recommendation."""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "$25", "callback_data": "bet_size_25"},
+                {"text": "$50", "callback_data": "bet_size_50"},
+                {"text": "$100", "callback_data": "bet_size_100"},
+                {"text": "$200", "callback_data": "bet_size_200"},
+            ],
+            [
+                {"text": "Clear cap", "callback_data": "bet_size_clear"},
+                {"text": "Back", "callback_data": "settings_back"},
+            ],
+        ],
+    }
+}
+
+
+def get_kelly_keyboard() -> dict[str, Any]:
+    """Inline keyboard for Kelly fraction override (e.g. 0.25 = quarter Kelly)."""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "25%", "callback_data": "kelly_25"},
+                {"text": "50%", "callback_data": "kelly_50"},
+                {"text": "100%", "callback_data": "kelly_100"},
+            ],
+            [
+                {"text": "Use default", "callback_data": "kelly_clear"},
+                {"text": "Back", "callback_data": "settings_back"},
+            ],
         ],
     }
 
@@ -596,6 +648,20 @@ async def handle_settings_callback(
             "Choose bankroll (USD) for sizing:",
             reply_markup=get_bankroll_keyboard(),
         )
+    elif data == "settings_bet_size":
+        await send_message(
+            token,
+            chat_id,
+            "Choose max bet size (USD). Kelly recommendation will be capped by this.",
+            reply_markup=get_bet_size_keyboard(),
+        )
+    elif data == "settings_kelly":
+        await send_message(
+            token,
+            chat_id,
+            "Choose Kelly fraction (full Kelly = 100%). Lower is more conservative.",
+            reply_markup=get_kelly_keyboard(),
+        )
     elif data == "settings_verbose":
         await send_message(
             token,
@@ -611,6 +677,28 @@ async def handle_settings_callback(
                 await send_message(token, chat_id, f"Bankroll set to ${amount}.")
         except ValueError:
             pass
+    elif data.startswith("bet_size_"):
+        if data == "bet_size_clear":
+            await set_user_prefs(user_id, clear_bet_size_usd=True)
+            await send_message(token, chat_id, "Bet size cap cleared. Using full Kelly (subject to config).")
+        else:
+            try:
+                amount = int(data.replace("bet_size_", ""))
+                if amount > 0:
+                    await set_user_prefs(user_id, bet_size_usd=float(amount))
+                    await send_message(token, chat_id, f"Max bet set to ${amount}.")
+            except ValueError:
+                pass
+    elif data.startswith("kelly_"):
+        if data == "kelly_clear":
+            await set_user_prefs(user_id, clear_kelly_fraction_override=True)
+            await send_message(token, chat_id, "Kelly: using default from config.")
+        else:
+            mapping = {"kelly_25": 0.25, "kelly_50": 0.5, "kelly_100": 1.0}
+            frac = mapping.get(data)
+            if frac is not None:
+                await set_user_prefs(user_id, kelly_fraction_override=frac)
+                await send_message(token, chat_id, f"Kelly fraction set to {frac:.0%}.")
     elif data == "verbose_on":
         await set_user_prefs(user_id, verbose=True)
         await send_message(token, chat_id, "Verbose mode: On.")

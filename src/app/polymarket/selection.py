@@ -3,8 +3,11 @@
 import re
 from datetime import date, datetime, timezone
 
+from app.logging_config import get_logger
 from app.polymarket.client import fetch_markets, parse_market
 from app.polymarket.models import Market
+
+logger = get_logger(__name__)
 
 # Slug patterns for BTC daily (e.g. "bitcoin-above-96500-on-january-30" or "btc-daily-...")
 BTC_DAILY_PATTERNS = (
@@ -13,10 +16,12 @@ BTC_DAILY_PATTERNS = (
     re.compile(r"daily.*bitcoin", re.I),
 )
 
-# Slug patterns for BTC hourly Up/Down (e.g. "bitcoin-up-or-down-january-31-2pm-et")
+# Slug patterns for BTC hourly Up/Down (e.g. "bitcoin-up-or-down-january-31-2pm-et" or "up or down")
 BTC_UP_DOWN_HOURLY_PATTERNS = (
     re.compile(r"bitcoin.*up.*down", re.I),
+    re.compile(r"bitcoin.*up\s*or\s*down", re.I),
     re.compile(r"btc.*up.*down", re.I),
+    re.compile(r"btc.*up\s*or\s*down", re.I),
 )
 
 
@@ -38,8 +43,10 @@ def is_btc_up_down_hourly_market(market: Market) -> bool:
 
 
 def _is_active_and_open(m: Market) -> bool:
-    """Market is active, not closed, and has order book."""
-    if m.closed or not m.active:
+    """Market is not closed; treat active/enable_order_book missing as OK (Gamma can omit them)."""
+    if m.closed is True:
+        return False
+    if m.active is False:
         return False
     if m.enable_order_book is False:
         return False
@@ -116,23 +123,33 @@ def _is_hourly_market_live(m: Market, now_utc: datetime) -> bool:
     """True if market is currently running: event started and end_date not yet passed."""
     event_start = _parse_event_start_utc(m)
     end_dt = _parse_end_date_utc(m)
-    if event_start is None or end_dt is None:
+    if end_dt is None:
         return False
+    if now_utc >= end_dt:
+        return False
+    if event_start is None:
+        # Gamma sometimes omits eventStartTime; treat as live if end_date is in future
+        return True
     return event_start <= now_utc < end_dt
 
 
 def _is_hourly_market_upcoming(m: Market, now_utc: datetime) -> bool:
-    """True if market has not yet started (event_start in the future)."""
+    """True if market has not yet started (event_start in the future, or end_date in future if no event_start)."""
     event_start = _parse_event_start_utc(m)
-    if event_start is None:
+    end_dt = _parse_end_date_utc(m)
+    if event_start is not None:
+        return event_start > now_utc
+    # Fallback when Gamma omits eventStartTime: treat as upcoming if end_date is in future
+    if end_dt is None:
         return False
-    return event_start > now_utc
+    return now_utc < end_dt
 
 
 def _collect_hourly_candidates(raw: list, now_utc: datetime) -> tuple[list[Market], list[Market]]:
     """Split raw Gamma markets into live and upcoming hourly BTC Up/Down lists."""
     live: list[Market] = []
     upcoming: list[Market] = []
+    slug_matched_rejected: list[str] = []
     for r in raw:
         m = parse_market(r)
         if not m or not m.condition_id:
@@ -140,15 +157,32 @@ def _collect_hourly_candidates(raw: list, now_utc: datetime) -> tuple[list[Marke
         if not _is_btc_up_down_hourly_slug(m.slug):
             continue
         if not _is_active_and_open(m):
+            slug_matched_rejected.append(f"{m.slug or '?'}(closed={m.closed},active={m.active},ob={m.enable_order_book})")
+            continue
+        end_dt = _parse_end_date_utc(m)
+        if end_dt is not None and now_utc >= end_dt:
+            slug_matched_rejected.append(f"{m.slug or '?'}(past)")
             continue
         if _is_hourly_market_live(m, now_utc):
             live.append(m)
         elif _is_hourly_market_upcoming(m, now_utc):
             upcoming.append(m)
+        else:
+            slug_matched_rejected.append(f"{m.slug or '?'}(past)")
+    if not live and not upcoming and slug_matched_rejected:
+        logger.info(
+            "select_hourly_no_candidates",
+            raw_count=len(raw),
+            slug_matched_but_rejected=slug_matched_rejected[:5],
+        )
     live.sort(key=lambda m: _parse_end_date_utc(m) or datetime.max.replace(tzinfo=timezone.utc))
-    upcoming.sort(
-        key=lambda m: _parse_event_start_utc(m) or datetime.max.replace(tzinfo=timezone.utc)
-    )
+    def _upcoming_sort_key(m: Market):
+        start = _parse_event_start_utc(m)
+        if start is not None:
+            return start
+        return _parse_end_date_utc(m) or datetime.max.replace(tzinfo=timezone.utc)
+
+    upcoming.sort(key=_upcoming_sort_key)
     return live, upcoming
 
 
@@ -175,6 +209,7 @@ async def select_btc_up_down_hourly_market(
                 continue
             if _is_hourly_market_live(m, now_utc) or _is_hourly_market_upcoming(m, now_utc):
                 return m
+    # Include markets ending today or later; use start of today UTC so we don't exclude current hour
     end_min = now_utc.date().isoformat() + "T00:00:00Z"
     raw = await fetch_markets(closed=False, limit=200, end_date_min=end_min)
     live, upcoming = _collect_hourly_candidates(raw, now_utc)
@@ -182,6 +217,13 @@ async def select_btc_up_down_hourly_market(
         return live[0]
     if upcoming:
         return upcoming[0]
+    # Log when no market so we can debug (e.g. Gamma slug/active/closed shape)
+    sample_slugs = [r.get("slug") or r.get("question", "")[:40] for r in raw[:10]]
+    logger.info(
+        "select_btc_up_down_hourly_no_market",
+        raw_count=len(raw),
+        sample_slugs=sample_slugs,
+    )
     return None
 
 

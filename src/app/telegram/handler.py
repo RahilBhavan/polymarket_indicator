@@ -143,9 +143,13 @@ async def _handle_callback(
         in (
             "settings_bankroll",
             "settings_verbose",
+            "settings_bet_size",
+            "settings_kelly",
             "settings_back",
         )
         or data.startswith("bankroll_")
+        or data.startswith("bet_size_")
+        or data.startswith("kelly_")
         or data in ("verbose_on", "verbose_off")
     ):
         message = callback.get("message", {})

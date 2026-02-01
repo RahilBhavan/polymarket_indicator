@@ -110,3 +110,15 @@ For **hourly/daily** markets, selection is by **slug patterns** in code (`polyma
 | `max_safe_size_usd(book, side)` | `polymarket/depth.py` | Max size at acceptable slippage from order book. |
 
 Together, these form the Polymarket connection: **Gamma for discovery and metadata, CLOB for trading prices and depth**, and optional **Polymarket WS** for live BTC price.
+
+---
+
+## 7. "No active BTC market" message
+
+If the bot replies with **"No active BTC market found (hourly Up/Down or daily)"**, it still sends an **analytical view** (model vs 50% reference). Possible causes:
+
+1. **No hourly/daily market listed** – Polymarket may not have an open BTC hourly Up/Down or daily market for the current time (e.g. between windows).
+2. **Gamma API** – Ensure `POLYMARKET_API_KEY` is set if your environment needs it. Check logs for `select_hourly_no_candidates` or `select_btc_up_down_hourly_no_market` to see `raw_count` and `sample_slugs` returned by Gamma.
+3. **Pinned slug** – If `POLYMARKET_BTC_HOURLY_SLUG` is set, the bot tries that market first; if it’s past or closed, no other market is tried. Clear the env or set it to a current slug (e.g. `bitcoin-up-or-down-january-31-5pm-et`).
+
+Market selection prefers **live** (event started, not ended) then **upcoming** hourly markets; if Gamma omits `eventStartTime`, markets with `endDate` in the future are still considered.

@@ -21,15 +21,21 @@ def recommended_size_usd(
     market_p_yes: float,
     bankroll_usd: float,
     max_safe_size_usd: float,
+    max_bet_usd: float | None = None,
+    kelly_fraction_override: float | None = None,
 ) -> float:
     """
-    Fractional Kelly * bankroll, capped by MAX_BANKROLL_PCT and by max_safe_size_usd.
+    Fractional Kelly * bankroll, capped by MAX_BANKROLL_PCT, max_safe_size_usd, and optional max_bet_usd.
+    When kelly_fraction_override is set (e.g. from user prefs), use it instead of config kelly_fraction.
     """
     settings = get_settings()
     k = kelly_fraction(model_p, market_p_yes)
-    frac = settings.kelly_fraction
+    frac = kelly_fraction_override if kelly_fraction_override is not None else settings.kelly_fraction
     cap_pct = settings.max_bankroll_pct
     size_kelly = bankroll_usd * k * frac
     size_cap_pct = bankroll_usd * cap_pct
     size_liquidity = max_safe_size_usd
-    return round(min(size_kelly, size_cap_pct, size_liquidity), 2)
+    rec = min(size_kelly, size_cap_pct, size_liquidity)
+    if max_bet_usd is not None and max_bet_usd > 0:
+        rec = min(rec, max_bet_usd)
+    return round(rec, 2)
